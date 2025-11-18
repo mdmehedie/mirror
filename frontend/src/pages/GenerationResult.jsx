@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import confetti from 'canvas-confetti'
 import {
   ArrowLeft,
@@ -28,6 +28,7 @@ const GenerationResult = () => {
   const [pollingInterval, setPollingInterval] = useState(null)
   const [hasNotified, setHasNotified] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [previousStatus, setPreviousStatus] = useState(null)
 
   // Status configurations
   const statusConfig = {
@@ -95,32 +96,29 @@ const GenerationResult = () => {
     }, 250)
   }
 
-  // Fetch generation details
-  const fetchGeneration = async () => {
-    try {
-      const data = await generationApi.getGeneration(id)
-      setGeneration(data)
-      setError(null)
 
-      // Update progress based on status
-      if (data.status === 'pending') {
-        setProgress(10)
-      } else if (data.status === 'processing') {
-        // Simulate progress
-        setProgress((prev) => Math.min(prev + 5, 90))
-      } else if (data.status === 'completed') {
-        setProgress(100)
-      }
+  // Setup polling
+  useEffect(() => {
+    // Fetch generation details
+    const fetchGeneration = async () => {
+      try {
+        const data = await generationApi.getGeneration(id)
+        setGeneration(data)
+        setError(null)
 
-      // Stop polling if generation is complete or failed
-      if (data.status === 'completed' || data.status === 'failed') {
-        if (pollingInterval) {
-          clearInterval(pollingInterval)
-          setPollingInterval(null)
+        // Update progress based on status
+        if (data.status === 'pending') {
+          setProgress(10)
+        } else if (data.status === 'processing') {
+          // Simulate progress
+          setProgress((prev) => Math.min(prev + 5, 90))
+        } else if (data.status === 'completed') {
+          setProgress(100)
         }
 
-        // Only show notification once
-        if (!hasNotified) {
+        // Only show notification once when status changes to completed/failed
+        if ((data.status === 'completed' || data.status === 'failed') &&
+            data.status !== previousStatus && !hasNotified) {
           if (data.status === 'completed') {
             toast.success('Generation completed successfully!')
             // Trigger confetti!
@@ -130,27 +128,31 @@ const GenerationResult = () => {
           }
           setHasNotified(true)
         }
-      }
-    } catch (err) {
-      const errorMessage = err.response?.data?.error || 'Failed to fetch generation'
-      setError(errorMessage)
-      toast.error(errorMessage)
-    } finally {
-      setLoading(false)
-    }
-  }
 
-  // Setup polling
-  useEffect(() => {
+        // Update previous status
+        setPreviousStatus(data.status)
+      } catch (err) {
+        const errorMessage = err.response?.data?.error || 'Failed to fetch generation'
+        setError(errorMessage)
+        toast.error(errorMessage)
+      } finally {
+        setLoading(false)
+      }
+    }
+
     // Initial fetch
     fetchGeneration()
 
-    // Start polling every 3 seconds
-    const interval = setInterval(() => {
-      fetchGeneration()
-    }, 3000)
+    // Only start polling if generation is not already complete
+    const startPolling = () => {
+      const interval = setInterval(() => {
+        fetchGeneration()
+      }, 3000)
+      setPollingInterval(interval)
+      return interval
+    }
 
-    setPollingInterval(interval)
+    const interval = startPolling()
 
     // Cleanup on unmount
     return () => {
@@ -158,7 +160,17 @@ const GenerationResult = () => {
         clearInterval(interval)
       }
     }
-  }, [id])
+  }, [id, previousStatus, hasNotified])
+
+  // Stop polling when generation is complete or failed
+  useEffect(() => {
+    if (generation && (generation.status === 'completed' || generation.status === 'failed')) {
+      if (pollingInterval) {
+        clearInterval(pollingInterval)
+        setPollingInterval(null)
+      }
+    }
+  }, [generation, pollingInterval])
 
   // Handle download
   const handleDownload = async () => {

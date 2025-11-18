@@ -12,7 +12,6 @@ import {
   Shirt,
   Wand2,
   TrendingUp,
-  Users,
   Star,
   ArrowRight,
   Check
@@ -334,7 +333,7 @@ const Home = () => {
         <div className="container mx-auto px-4">
           <AnimatedSection className="text-center mb-16">
             <h2 className="text-5xl font-bold mb-4">
-              Why Choose <span className="text-primary">Ecompho</span>?
+              Why Choose <span className="text-primary">Mirror</span>?
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
               Experience the perfect blend of cutting-edge AI technology and user-friendly design

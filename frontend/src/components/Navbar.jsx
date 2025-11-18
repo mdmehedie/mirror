@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { Button } from "@/components/ui/button"
+import Logo from "../../public/assets/logo.png";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,8 +33,11 @@ const Navbar = () => {
     <nav className="border-b bg-background">
       <div className="container mx-auto px-4">
         <div className="flex justify-between items-center h-16">
-          <Link to="/" className="text-2xl font-bold text-primary">
-            ecompho
+          {/*<Link to="/" className="text-2xl font-bold text-primary">*/}
+          {/*  Mirror*/}
+          {/*</Link>*/}
+          <Link className="text-2xl font-bold text-primary" to="/">
+            <img src={Logo} alt="Logo" width={168} />
           </Link>
 
           <div className="flex items-center space-x-4">
