@@ -51,8 +51,8 @@ class GeminiProvider(BaseProvider):
         generation request. For production, consider using dedicated try-on models.
 
         Args:
-            model_image_url: URL to model image
-            garment_image_url: URL to garment image
+            model_image_url: URL or file path to model image
+            garment_image_url: URL or file path to garment image
             quality_preset: Quality setting (affects prompt detail)
             category: Garment category (not used in Gemini, but required by interface)
             garment_description: Optional description (not used in Gemini)
@@ -146,25 +146,32 @@ class GeminiProvider(BaseProvider):
 
         return job.get('result_url')
 
-    def _download_image(self, url: str) -> bytes:
+    def _download_image(self, url_or_path: str) -> bytes:
         """
-        Download image from URL.
+        Download image from URL or read from local file path.
 
         Args:
-            url: Image URL
+            url_or_path: Image URL or local file path
 
         Returns:
             bytes: Image data
 
         Raises:
-            Exception: If download fails
+            Exception: If download/read fails
         """
         try:
-            response = httpx.get(url, timeout=30.0, follow_redirects=True)
+            # Check if it's a local file path (doesn't start with http:// or https://)
+            if not url_or_path.startswith('http://') and not url_or_path.startswith('https://'):
+                # Read from local file
+                with open(url_or_path, 'rb') as f:
+                    return f.read()
+
+            # Download from URL
+            response = httpx.get(url_or_path, timeout=30.0, follow_redirects=True)
             response.raise_for_status()
             return response.content
         except Exception as e:
-            raise Exception(f"Failed to download image from {url}: {str(e)}")
+            raise Exception(f"Failed to load image from {url_or_path}: {str(e)}")
 
     def _create_prompt(self, quality_preset: str) -> str:
         """

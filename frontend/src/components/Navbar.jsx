@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { User, LogOut, LayoutDashboard, Settings, Sparkles, Image } from "lucide-react"
+import { User, LogOut, LayoutDashboard, Settings, Sparkles, Image, KeyRound } from "lucide-react"
 
 const Navbar = () => {
   const { user, logout, isAuthenticated } = useAuth()
@@ -51,6 +51,13 @@ const Navbar = () => {
                   <Button variant="ghost">
                     <Image className="mr-2 h-4 w-4" />
                     My Gallery
+                  </Button>
+                </Link>
+
+                <Link to="/integrations">
+                  <Button variant="ghost">
+                    <KeyRound className="mr-2 h-4 w-4" />
+                    API
                   </Button>
                 </Link>
 

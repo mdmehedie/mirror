@@ -22,6 +22,9 @@ const Gallery = () => {
   const [generations, setGenerations] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [page, setPage] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+  const [hasNextPage, setHasNextPage] = useState(false)
 
   // Filters and sorting
   const [sortBy, setSortBy] = useState('-created_at') // Default: newest first
@@ -54,6 +57,12 @@ const Gallery = () => {
       bgColor: 'bg-red-100',
       label: 'Failed',
     },
+    closed: {
+      icon: XCircle,
+      color: 'text-gray-600',
+      bgColor: 'bg-gray-100',
+      label: 'Closed',
+    },
   }
 
   // Fetch generations
@@ -62,6 +71,7 @@ const Gallery = () => {
     try {
       const params = {
         sort_by: sortBy,
+        page,
       }
 
       // Add status filter if not "all"
@@ -73,6 +83,8 @@ const Gallery = () => {
       // Handle both array response and paginated response
       const generationsArray = Array.isArray(data) ? data : (data.results || [])
       setGenerations(generationsArray)
+      setTotalCount(Array.isArray(data) ? data.length : (data.count || 0))
+      setHasNextPage(Boolean(data.next))
       setError(null)
     } catch (err) {
       const errorMessage = err.response?.data?.error || 'Failed to load generations'
@@ -86,7 +98,7 @@ const Gallery = () => {
   // Fetch on mount and when filters change
   useEffect(() => {
     fetchGenerations()
-  }, [sortBy, statusFilter])
+  }, [sortBy, statusFilter, page])
 
   // Format date
   const formatDate = (dateString) => {
@@ -156,7 +168,7 @@ const Gallery = () => {
               </label>
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
+                onChange={(e) => { setSortBy(e.target.value); setPage(1) }}
                 className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="-created_at">Newest First</option>
@@ -174,7 +186,7 @@ const Gallery = () => {
               </label>
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
                 className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="all">All Status</option>
@@ -182,6 +194,7 @@ const Gallery = () => {
                 <option value="processing">Processing</option>
                 <option value="pending">Pending</option>
                 <option value="failed">Failed</option>
+                <option value="closed">Closed</option>
               </select>
             </div>
           </div>
@@ -330,7 +343,11 @@ const Gallery = () => {
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5 }}
           >
-            Showing {generations.length} generation{generations.length !== 1 ? 's' : ''}
+            <p>Showing page {page} of {totalCount} generation{totalCount !== 1 ? 's' : ''}</p>
+            <div className="flex justify-center gap-2 mt-3">
+              <Button variant="outline" disabled={page === 1} onClick={() => setPage(page - 1)}>Previous</Button>
+              <Button variant="outline" disabled={!hasNextPage} onClick={() => setPage(page + 1)}>Next</Button>
+            </div>
           </motion.div>
         </>
       )}

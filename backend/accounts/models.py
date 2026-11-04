@@ -32,3 +32,6 @@ class User(AbstractUser):
     def full_name(self):
         """Returns the user's full name."""
         return f"{self.first_name} {self.last_name}".strip() or self.username
+
+
+from .api_keys import MerchantApiKey  # noqa: E402,F401

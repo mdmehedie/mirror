@@ -57,6 +57,7 @@ class Generation(models.Model):
         ('processing', 'Processing'),
         ('completed', 'Completed'),
         ('failed', 'Failed'),
+        ('closed', 'Closed'),
     ]
 
     CATEGORY_CHOICES = [

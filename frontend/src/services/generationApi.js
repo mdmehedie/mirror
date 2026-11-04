@@ -51,6 +51,15 @@ const generationApi = {
     return response.data
   },
 
+  closeGeneration: async (id) => {
+    const response = await api.post(`/generation/generations/${id}/close/`)
+    return response.data
+  },
+
+  deleteGeneration: async (id) => {
+    await api.delete(`/generation/generations/${id}/`)
+  },
+
   /**
    * List all generations with optional filters and sorting
    * @param {Object} params - Query parameters
@@ -60,6 +69,11 @@ const generationApi = {
    */
   listGenerations: async (params = {}) => {
     const response = await api.get('/generation/generations/', { params })
+    return response.data
+  },
+
+  getStats: async () => {
+    const response = await api.get('/generation/stats/')
     return response.data
   },
 }

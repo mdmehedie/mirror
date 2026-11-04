@@ -4,6 +4,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from django.db.models import Count, Q, Avg
 from PIL import Image as PILImage
 from .models import Image, Generation
 from .serializers import (
@@ -147,7 +149,7 @@ class GenerationListCreateView(generics.ListCreateAPIView):
         # Filter by status
         status_filter = self.request.query_params.get('status')
         if status_filter:
-            if status_filter in ['pending', 'processing', 'completed', 'failed']:
+            if status_filter in ['pending', 'processing', 'completed', 'failed', 'closed']:
                 queryset = queryset.filter(status=status_filter)
 
         # Sort by field
@@ -213,7 +215,7 @@ class GenerationListCreateView(generics.ListCreateAPIView):
         )
 
 
-class GenerationDetailView(generics.RetrieveAPIView):
+class GenerationDetailView(generics.RetrieveDestroyAPIView):
     """
     API endpoint for retrieving a single generation.
 
@@ -233,3 +235,51 @@ class GenerationDetailView(generics.RetrieveAPIView):
             'garment_image',
             'result_image'
         )
+
+    def destroy(self, request, *args, **kwargs):
+        generation = self.get_object()
+        if generation.status in ('pending', 'processing'):
+            return Response(
+                {'error': 'Close the generation before deleting it.'},
+                status=status.HTTP_409_CONFLICT
+            )
+        result_image = generation.result_image
+        generation.delete()
+        if result_image and not result_image.generation_results.exists():
+            result_image.file.delete(save=False)
+            result_image.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class GenerationCloseView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        generation = get_object_or_404(Generation, pk=pk, user=request.user)
+        if generation.status == 'closed':
+            return Response(GenerationSerializer(generation, context={'request': request}).data)
+        updated = Generation.objects.filter(
+            pk=pk, user=request.user, status__in=('pending', 'processing')
+        ).update(status='closed', completed_at=timezone.now())
+        if not updated:
+            return Response(
+                {'error': 'This generation has already finished.'},
+                status=status.HTTP_409_CONFLICT
+            )
+        generation.refresh_from_db()
+        return Response(GenerationSerializer(generation, context={'request': request}).data)
+
+
+class GenerationStatsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        stats = Generation.objects.filter(user=request.user).aggregate(
+            total=Count('id'),
+            completed=Count('id', filter=Q(status='completed')),
+            processing=Count('id', filter=Q(status__in=['pending', 'processing'])),
+            failed=Count('id', filter=Q(status='failed')),
+            closed=Count('id', filter=Q(status='closed')),
+            average_processing_seconds=Avg('processing_time_seconds'),
+        )
+        return Response(stats)

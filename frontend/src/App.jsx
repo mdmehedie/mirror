@@ -10,6 +10,7 @@ import Profile from './pages/Profile'
 import CreateGeneration from './pages/CreateGeneration'
 import GenerationResult from './pages/GenerationResult'
 import Gallery from './pages/Gallery'
+import Integrations from './pages/Integrations'
 
 function App() {
   return (
@@ -39,6 +40,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route path="/integrations" element={<ProtectedRoute><Integrations /></ProtectedRoute>} />
 
             {/* Generation Flow Routes */}
             <Route

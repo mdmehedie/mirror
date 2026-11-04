@@ -5,6 +5,7 @@ import httpx
 import time
 import logging
 from PIL import Image as PILImage
+from io import BytesIO
 from .models import Generation, Image
 from .providers import get_provider
 
@@ -46,8 +47,8 @@ def process_generation(self, generation_id):
 
     try:
         # Update status to processing
-        generation.status = 'processing'
-        generation.save()
+        if not Generation.objects.filter(id=generation_id, status='pending').update(status='processing'):
+            return {'status': 'closed'}
         logger.info(f"Generation {generation_id} status: processing")
 
         # Get provider
@@ -88,6 +89,8 @@ def process_generation(self, generation_id):
             generation.category,
             generation.garment_description or ''
         )
+        if not Generation.objects.filter(id=generation_id, status='processing').exists():
+            return {'status': 'closed'}
         logger.info(f"Provider job ID: {job_id[:50]}...")
 
         # Poll for completion (max 5 minutes = 60 attempts * 5 seconds)
@@ -95,6 +98,8 @@ def process_generation(self, generation_id):
         poll_interval = 5  # seconds
 
         for attempt in range(max_attempts):
+            if not Generation.objects.filter(id=generation_id, status='processing').exists():
+                return {'status': 'closed'}
             result_status = provider.get_status(job_id)
             logger.info(f"Attempt {attempt + 1}/{max_attempts}: Status = {result_status}")
 
@@ -111,46 +116,53 @@ def process_generation(self, generation_id):
 
                 except Exception as e:
                     logger.error(f"Failed to download result: {e}")
-                    generation.status = 'failed'
-                    generation.error_message = f"Failed to download result: {str(e)}"
-                    generation.save()
-                    return {'status': 'failed', 'error': generation.error_message}
+                    error_message = f"Failed to download result: {str(e)}"
+                    Generation.objects.filter(id=generation_id, status='processing').update(
+                        status='failed', error_message=error_message
+                    )
+                    return {'status': 'failed', 'error': error_message}
+
+                if not Generation.objects.filter(id=generation_id, status='processing').exists():
+                    return {'status': 'closed'}
+
+                try:
+                    with PILImage.open(BytesIO(response.content)) as downloaded_image:
+                        image_format = downloaded_image.format
+                        width, height = downloaded_image.size
+                        downloaded_image.verify()
+                    extension = {'JPEG': 'jpg', 'PNG': 'png', 'WEBP': 'webp'}[image_format]
+                except (OSError, ValueError, KeyError) as exc:
+                    Generation.objects.filter(id=generation_id, status='processing').update(
+                        status='failed', error_message=f'Invalid result image: {exc}'
+                    )
+                    return {'status': 'failed', 'error': 'invalid result image'}
 
                 # Save result image
                 result_image = Image.objects.create(
                     user=generation.user,
                     image_type='result_image',
-                    width=0,  # Will be updated after saving
-                    height=0,
+                    width=width,
+                    height=height,
                     file_size=len(response.content)
                 )
 
                 # Save file
-                filename = f"result_{generation.id}.jpg"
+                filename = f"result_{generation.id}.{extension}"
                 result_image.file.save(filename, ContentFile(response.content), save=False)
-
-                # Update dimensions
-                try:
-                    pil_image = PILImage.open(result_image.file)
-                    result_image.width, result_image.height = pil_image.size
-                    result_image.save()
-                    logger.info(f"Result image dimensions: {result_image.width}x{result_image.height}")
-
-                except Exception as e:
-                    logger.warning(f"Could not get image dimensions: {e}")
-                    result_image.width = 0
-                    result_image.height = 0
-                    result_image.save()
+                result_image.save()
 
                 # Update generation
                 end_time = time.time()
                 processing_time = round(end_time - start_time, 2)
 
-                generation.status = 'completed'
-                generation.result_image = result_image
-                generation.processing_time_seconds = processing_time
-                generation.completed_at = timezone.now()
-                generation.save()
+                updated = Generation.objects.filter(id=generation_id, status='processing').update(
+                    status='completed', result_image=result_image,
+                    processing_time_seconds=processing_time, completed_at=timezone.now()
+                )
+                if not updated:
+                    result_image.file.delete(save=False)
+                    result_image.delete()
+                    return {'status': 'closed'}
 
                 logger.info(
                     f"Generation {generation_id} completed successfully "
@@ -165,10 +177,11 @@ def process_generation(self, generation_id):
 
             elif result_status == 'failed':
                 logger.error(f"Generation {generation_id} failed on provider side")
-                generation.status = 'failed'
-                generation.error_message = "Generation failed on provider side"
-                generation.save()
-                return {'status': 'failed', 'error': generation.error_message}
+                error_message = "Generation failed on provider side"
+                Generation.objects.filter(id=generation_id, status='processing').update(
+                    status='failed', error_message=error_message
+                )
+                return {'status': 'failed', 'error': error_message}
 
             # Wait before next poll (only if not completed or failed)
             if attempt < max_attempts - 1:
@@ -176,18 +189,24 @@ def process_generation(self, generation_id):
 
         # Timeout after max attempts
         logger.error(f"Generation {generation_id} timed out after {max_attempts * poll_interval} seconds")
-        generation.status = 'failed'
-        generation.error_message = f"Generation timed out after {max_attempts * poll_interval} seconds"
-        generation.save()
+        Generation.objects.filter(id=generation_id, status='processing').update(
+            status='failed',
+            error_message=f"Generation timed out after {max_attempts * poll_interval} seconds"
+        )
         return {'status': 'failed', 'error': 'timeout'}
 
     except Exception as exc:
         # Log error and retry
         logger.error(f"Generation {generation_id} error: {exc}", exc_info=True)
 
-        generation.status = 'failed'
-        generation.error_message = str(exc)
-        generation.save()
+        retrying = self.request.retries < self.max_retries
+        if not Generation.objects.filter(id=generation_id, status='processing').update(
+            status='pending' if retrying else 'failed', error_message=str(exc)
+        ):
+            return {'status': 'closed'}
+
+        if not retrying:
+            return {'status': 'failed', 'error': str(exc)}
 
         # Retry with exponential backoff
         retry_countdown = 60 * (2 ** self.request.retries)

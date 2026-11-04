@@ -11,6 +11,7 @@ import {
   Loader2,
   Image as ImageIcon,
   Sparkles,
+  Trash2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
@@ -29,6 +30,7 @@ const GenerationResult = () => {
   const [hasNotified, setHasNotified] = useState(false)
   const [progress, setProgress] = useState(0)
   const [previousStatus, setPreviousStatus] = useState(null)
+  const [isUpdating, setIsUpdating] = useState(false)
 
   // Status configurations
   const statusConfig = {
@@ -64,6 +66,14 @@ const GenerationResult = () => {
       borderColor: 'border-red-200',
       label: 'Failed',
       description: 'Generation failed. Please try again.',
+    },
+    closed: {
+      icon: XCircle,
+      color: 'text-gray-600',
+      bgColor: 'bg-gray-50',
+      borderColor: 'border-gray-200',
+      label: 'Closed',
+      description: 'This generation was closed. No result will be saved.',
     },
   }
 
@@ -143,7 +153,7 @@ const GenerationResult = () => {
     // Initial fetch
     fetchGeneration()
 
-    // Only start polling if generation is not already complete
+    // Poll until the generation reaches a final status.
     const startPolling = () => {
       const interval = setInterval(() => {
         fetchGeneration()
@@ -164,13 +174,39 @@ const GenerationResult = () => {
 
   // Stop polling when generation is complete or failed
   useEffect(() => {
-    if (generation && (generation.status === 'completed' || generation.status === 'failed')) {
+    if (generation && ['completed', 'failed', 'closed'].includes(generation.status)) {
       if (pollingInterval) {
         clearInterval(pollingInterval)
         setPollingInterval(null)
       }
     }
   }, [generation, pollingInterval])
+
+  const handleClose = async () => {
+    setIsUpdating(true)
+    try {
+      const updated = await generationApi.closeGeneration(id)
+      setGeneration(updated)
+      toast.success('Generation closed')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to close generation')
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!window.confirm('Delete this generation? This cannot be undone.')) return
+    setIsUpdating(true)
+    try {
+      await generationApi.deleteGeneration(id)
+      toast.success('Generation deleted')
+      navigate('/gallery')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete generation')
+      setIsUpdating(false)
+    }
+  }
 
   // Handle download
   const handleDownload = async () => {
@@ -239,12 +275,25 @@ const GenerationResult = () => {
           <h1 className="text-3xl font-bold">{generation?.name || 'Generation Result'}</h1>
         </div>
 
-        {generation?.status === 'completed' && (
-          <Button onClick={handleDownload} size="lg">
-            <Download className="mr-2 h-5 w-5" />
-            Download Result
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {generation?.status === 'completed' && (
+            <Button onClick={handleDownload} size="lg">
+              <Download className="mr-2 h-5 w-5" />
+              Download Result
+            </Button>
+          )}
+          {['pending', 'processing'].includes(generation?.status) ? (
+            <Button onClick={handleClose} disabled={isUpdating} variant="outline" size="lg">
+              <XCircle className="mr-2 h-5 w-5" />
+              {isUpdating ? 'Closing...' : 'Close Generation'}
+            </Button>
+          ) : (
+            <Button onClick={handleDelete} disabled={isUpdating} variant="destructive" size="lg">
+              <Trash2 className="mr-2 h-5 w-5" />
+              {isUpdating ? 'Deleting...' : 'Delete Generation'}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Status Card */}
@@ -451,7 +500,9 @@ const GenerationResult = () => {
             </div>
             {generation?.completed_at && (
               <div>
-                <dt className="font-medium text-gray-500">Completed At</dt>
+                <dt className="font-medium text-gray-500">
+                  {generation.status === 'closed' ? 'Closed At' : 'Completed At'}
+                </dt>
                 <dd className="mt-1">{new Date(generation.completed_at).toLocaleString()}</dd>
               </div>
             )}

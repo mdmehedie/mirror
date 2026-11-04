@@ -10,6 +10,7 @@ from .views import (
     ChangePasswordView,
     delete_account_view,
 )
+from .key_views import ApiKeyListCreateView, ApiKeyDetailView
 
 app_name = 'accounts'
 
@@ -25,4 +26,6 @@ urlpatterns = [
     path('user/update/', UpdateProfileView.as_view(), name='update_profile'),
     path('user/change-password/', ChangePasswordView.as_view(), name='change_password'),
     path('user/delete/', delete_account_view, name='delete_account'),
+    path('api-keys/', ApiKeyListCreateView.as_view(), name='api-keys'),
+    path('api-keys/<int:pk>/', ApiKeyDetailView.as_view(), name='api-key-detail'),
 ]
