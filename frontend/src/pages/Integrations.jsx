@@ -46,7 +46,10 @@ const Integrations = () => {
     }
   }
 
-  const baseUrl = new URL(import.meta.env.VITE_API_URL || 'http://localhost:8000/api').origin
+  const baseUrl = new URL(
+    import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
+    window.location.origin
+  ).origin
   const example = `curl -X POST '${baseUrl}/api/v1/generations/' \\
   -H 'X-Ecompho-Key: YOUR_API_KEY' \\
   -F 'model_image=@person.jpg' \\

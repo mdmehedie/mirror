@@ -1,6 +1,7 @@
 # Django
 Django==4.2.10
 djangorestframework==3.14.0
+gunicorn==22.0.0
 
 # Database
 psycopg2-binary==2.9.9
