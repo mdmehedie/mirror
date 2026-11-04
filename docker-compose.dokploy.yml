@@ -26,6 +26,8 @@ services:
       timeout: 3s
       retries: 10
       start_period: 30s
+    networks:
+      - dokploy-network
 
   worker:
     build: ./backend
@@ -37,6 +39,9 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+
+    networks:
+      - dokploy-network
 
   frontend:
     build:
@@ -52,7 +57,13 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    networks:
+      - dokploy-network
 
 volumes:
   media_data:
   static_data:
+
+networks:
+  dokploy-network:
+    external: true
