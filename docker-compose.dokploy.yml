@@ -13,8 +13,11 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       DB_HOST: ${DB_HOST:-db}
       DB_PORT: "5432"
-      REDIS_HOST: ${REDIS_HOST:?Set REDIS_HOST to your Dokploy Redis internal host}
+      # Either set REDIS_URL (Dokploy "Internal Connection URL"), or REDIS_HOST/PORT/PASSWORD
+      REDIS_URL: ${REDIS_URL:-}
+      REDIS_HOST: ${REDIS_HOST:-}
       REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_USER: ${REDIS_USER:-}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       MEDIA_ROOT: /app/media
       REPLICATE_API_TOKEN: ${REPLICATE_API_TOKEN:?Set REPLICATE_API_TOKEN in .env}

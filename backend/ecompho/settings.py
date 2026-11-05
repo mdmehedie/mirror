@@ -6,7 +6,7 @@ Template created from AniFight project.
 from pathlib import Path
 from datetime import timedelta
 import os
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -179,11 +179,28 @@ CSRF_TRUSTED_ORIGINS = env_list(
 )
 
 # Redis connection (shared by Channels, cache and Celery)
-REDIS_HOST = os.environ.get('REDIS_HOST', '127.0.0.1')
-REDIS_PORT = int(os.environ.get('REDIS_PORT', '6379'))
-REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD', '')
-_redis_auth = f":{quote(REDIS_PASSWORD, safe='')}@" if REDIS_PASSWORD else ''
-REDIS_URL = f"redis://{_redis_auth}{REDIS_HOST}:{REDIS_PORT}"
+def _build_redis_url():
+    """Accept either a full REDIS_URL (e.g. Dokploy's internal connection URL)
+    or REDIS_HOST / REDIS_PORT / REDIS_USER / REDIS_PASSWORD parts.
+    Returns the URL without a trailing /<db>."""
+    url = os.environ.get('REDIS_URL', '').strip()
+    host = os.environ.get('REDIS_HOST', '127.0.0.1').strip()
+    # Tolerate a full URL pasted into REDIS_HOST
+    if not url and host.startswith(('redis://', 'rediss://')):
+        url = host
+    if url:
+        parsed = urlsplit(url)
+        return f"{parsed.scheme}://{parsed.netloc}"
+    port = os.environ.get('REDIS_PORT', '6379').strip()
+    user = os.environ.get('REDIS_USER', '')
+    password = os.environ.get('REDIS_PASSWORD', '')
+    auth = ''
+    if password:
+        auth = f"{quote(user, safe='')}:{quote(password, safe='')}@"
+    return f"redis://{auth}{host}:{port}"
+
+
+REDIS_URL = _build_redis_url()
 
 # Channels
 CHANNEL_LAYERS = {
