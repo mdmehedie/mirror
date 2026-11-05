@@ -6,6 +6,7 @@ Template created from AniFight project.
 from pathlib import Path
 from datetime import timedelta
 import os
+from urllib.parse import quote
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -177,12 +178,19 @@ CSRF_TRUSTED_ORIGINS = env_list(
     'http://localhost:5555,http://127.0.0.1:5555,http://localhost:8000,http://127.0.0.1:8000'
 )
 
+# Redis connection (shared by Channels, cache and Celery)
+REDIS_HOST = os.environ.get('REDIS_HOST', '127.0.0.1')
+REDIS_PORT = int(os.environ.get('REDIS_PORT', '6379'))
+REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD', '')
+_redis_auth = f":{quote(REDIS_PASSWORD, safe='')}@" if REDIS_PASSWORD else ''
+REDIS_URL = f"redis://{_redis_auth}{REDIS_HOST}:{REDIS_PORT}"
+
 # Channels
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            "hosts": [(os.environ.get('REDIS_HOST', '127.0.0.1'), int(os.environ.get('REDIS_PORT', '6379')))],
+            "hosts": [f"{REDIS_URL}/0"],
         },
     },
 }
@@ -191,13 +199,13 @@ CHANNEL_LAYERS = {
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': f"redis://{os.environ.get('REDIS_HOST', '127.0.0.1')}:{os.environ.get('REDIS_PORT', '6379')}/1",
+        'LOCATION': f"{REDIS_URL}/1",
     }
 }
 
 # Celery Configuration
-CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://127.0.0.1:6379/0')
-CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://127.0.0.1:6379/0')
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL') or f"{REDIS_URL}/0"
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND') or f"{REDIS_URL}/0"
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
